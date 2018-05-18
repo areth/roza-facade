@@ -15,5 +15,8 @@
   "bugs": {
     "url": "https://github.com/areth/roza-facade/issues"
   },
-  "homepage": "https://github.com/areth/roza-facade#readme"
+  "homepage": "https://github.com/areth/roza-facade#readme",
+  "dependencies": {
+    "express": "^4.16.3"
+  }
 }
