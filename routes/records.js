@@ -1,12 +1,13 @@
-var express = require('express');
-var router = express.Router();
+const express = require('express');
 
-router.get('/add', function(req, res, next) {
-  res.json({id: "someid"});
+const router = express.Router();
+
+router.get('/add', (req, res, next) => {
+  res.json({ id: 'someid' });
 });
 
-router.get('/move', function(req, res, next) {
-  res.json({id: "someid"});
+router.get('/move', (req, res, next) => {
+  res.json({ id: 'someid' });
 });
 
 module.exports = router;
