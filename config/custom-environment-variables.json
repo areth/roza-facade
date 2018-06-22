@@ -1,6 +1,6 @@
 {
 	"db":{
-		"address": "FACADE_DB_ADDRESS",
+		"host": "FACADE_DB_ADDRESS",
 		"port": "FACADE_DB_PORT"
 	}
 }
