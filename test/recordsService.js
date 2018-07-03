@@ -1,9 +1,10 @@
 const chai = require('chai');
 const sinon = require('sinon');
 const sinonChai = require('sinon-chai');
-const redisUtils = require('../utils/redisUtils');
+const { redisUtils } = require('roza-lib');
 // const async = require('async');
-const recordsServiceFactory = require('../utils/recordsService');
+const recordsServiceFactory = require('../lib/recordsService');
+const config = require('config');
 
 // const { expect } = chai;
 // const should = chai.should();
@@ -15,7 +16,8 @@ const newRecord = {
 
 chai.use(sinonChai);
 
-const redisClient = redisUtils.createClient();
+const redisClient = redisUtils
+  .createClient(config.get('db.port'), config.get('db.host'), 'test');
 const setAsyncStub = sinon.stub(redisClient, 'setAsync').resolves('OK');
 const publishAsyncStub = sinon.stub(redisClient, 'publishAsync').resolves(1);
 const recordsService = recordsServiceFactory(redisClient);

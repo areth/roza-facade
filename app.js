@@ -3,7 +3,7 @@ const express = require('express');
 const path = require('path');
 const logger = require('morgan');
 
-const recordsService = require('./utils/recordsService');
+const recordsService = require('./lib/recordsService');
 const indexRouter = require('./routes/index');
 const recordsRouter = require('./routes/records');
 
