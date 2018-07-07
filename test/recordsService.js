@@ -1,80 +1,124 @@
 const chai = require('chai');
 const sinon = require('sinon');
 const sinonChai = require('sinon-chai');
-const { redisUtils } = require('roza-lib');
+const { redisUtils, delay } = require('roza-lib');
 // const async = require('async');
 const recordsServiceFactory = require('../lib/recordsService');
 const config = require('config');
 
-// const { expect } = chai;
+const { expect } = chai;
 // const should = chai.should();
 chai.should();
-
-const newRecord = {
-  text: 'aww, what a pleasant day!',
-};
 
 chai.use(sinonChai);
 
 const redisClient = redisUtils
   .createClient(config.get('db.port'), config.get('db.host'), 'test');
-const setAsyncStub = sinon.stub(redisClient, 'setAsync').resolves('OK');
-const publishAsyncStub = sinon.stub(redisClient, 'publishAsync').resolves(1);
 const recordsService = recordsServiceFactory(redisClient);
 
-describe('records service', () => {
-  // before((done) => {
-  //   app.get('db').flushdb(done);
-  // });
+// listen for messages
+const subStub = sinon.stub();
+const redisClientSub = redisUtils
+  .createClient(config.get('db.port'), config.get('db.host'), 'test');
+redisClientSub.on('pmessage', subStub);
+// redisClientSub.on('pmessage', (pattern, ch, msg) => {
+//   console.log(`sub stub ${ch} msg ${msg}`);
+//   subStub(pattern, ch, msg);
+// });
+redisClientSub.psubscribe('*');
 
-  // beforeEach((done) => {
-  //   // Before each test we empty the database
-  //   Book.remove({}, (err) => {
-  //      done();
-  //   });
-  // });
-  /*
-  * Test the /GET route
-  */
+const record = {
+  text: 'aww, that was a pleasant day!',
+};
+const recordId = recordsService.newId();
+const newRecord = {
+  text: 'aww, what a pleasant day!',
+};
+
+const subscriberDelay = 500;
+
+describe('records service', () => {
   describe('add new record', () => {
-    it('it should add record to db and post message', (done) => {
-      // async.series([
-      //   (cb) => {
-      //     chai.request(app)
-      //     .post('/records/add')
-      //     .send(newRecord)
-      //     .end((err, res) => { res.should.have.status(200); cb(); });
-      //   },
-      //   (cb) => {
-      //     chai.request(app)
-      //     .post('/records/add')
-      //     .send(newRecord)
-      //     .end((err, res) => { res.should.have.status(200); cb(); });
-      //   },
-      //   ], done);
+    it('it should add record to db and post message', () =>
       recordsService.add(newRecord)
+        .then((id) => {
+          id.should.be.a('string');
+          return id;
+        })
+        // delay before checking subscribed stub
+        .then(delay(subscriberDelay))
+        // check subscribed stub
+        .then((id) => {
+          subStub.should.have.been.calledWith('*', redisUtils.channelNewRecord, id);
+          return id;
+        })
+        // check saved record
+        .then(id => recordsService.get(id))
         .then((res) => {
-          res.should.be.a('string');
-          // res.body.id.should.be.a('number');
-          // res.body.name.should.equal('Spork');
-          // res.body.id.should.equal(3);
-          // setAsyncStub.should.have.been.calledOnce;
-          setAsyncStub.should.have.been.calledWith(sinon.match.string, newRecord.text);
-          // publishAsyncStub.should.have.been.calledOnce;
-          publishAsyncStub.should.have.been
-            .calledWith(redisUtils.channelNewRecord, sinon.match.string);
-          // addStub.should.have.been.calledWith(newRecord);
+          expect(res).to.deep.equal(newRecord);
+        }));
+  });
+
+  describe('delete record', () => {
+    before(() =>
+      redisClient.setAsync(redisUtils.recordKey(recordId), JSON.stringify(record)));
+
+    it('it should move record to deleted, post message', () =>
+      recordsService.delete(recordId)
+        .then((id) => {
+          id.should.be.a('string');
+          id.should.equal(recordId);
+          return id;
         })
-        // .then(() => app.get('db').getAsync('record_text'))
-        // .then((res) => {
-        //   expect(res).to.equal(newRecord.text);
-        // })
+        // delay before checking subscribed stub
+        .then(delay(subscriberDelay))
+        // check subscribed stub
+        .then((id) => {
+          subStub.should.have.been.calledWith('*', redisUtils.channelDeletedRecord, id);
+          return id;
+        })
+        // check record has been deleted
+        .then(id => recordsService.get(id))
+        .then((res) => {
+          expect(res).to.be.null;
+        })
+        // check record backup
+        .then(() => redisClient.getAsync(redisUtils.deletedRecordKey(recordId)))
+        .then((res) => {
+          expect(res).to.be.equal(JSON.stringify(record));
+        }));
+  });
+
+  describe('undo delete record', () => {
+    before(() =>
+      redisClient.setAsync(redisUtils.deletedRecordKey(recordId), JSON.stringify(record)));
+
+    it('it should restore record from deleted, post message', () =>
+      recordsService.deleteUndo(recordId)
+        .then((rec) => {
+          expect(rec).to.deep.equal(record);
+        })
+        // delay before checking subscribed stub
+        .then(delay(subscriberDelay))
+        // check subscribed stub
         .then(() => {
-          done();
+          subStub.should.have.been.calledWith('*', redisUtils.channelUndoDeletedRecord, recordId);
         })
-        .catch((err) => {
-          done(err);
-        });
-    });
+        // check record has been restored
+        .then(id => recordsService.get(recordId))
+        .then((res) => {
+          expect(res).to.deep.equal(record);
+        }));
+  });
+
+  describe('get record', () => {
+    before(() =>
+      redisClient.setAsync(redisUtils.recordKey(recordId), JSON.stringify(record)));
+
+    it('it should return record by id', () =>
+      recordsService.get(recordId)
+        .then((rec) => {
+          expect(rec).to.deep.equal(record);
+        }));
   });
 });
